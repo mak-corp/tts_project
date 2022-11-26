@@ -191,6 +191,7 @@ class Trainer(BaseTrainer):
                 #     is_train=False,
                 #     metrics=self.evaluation_metrics,
                 # )
+                batch = self.move_batch_to_device(batch, self.device)
                 mel_output = self.model(**batch)
                 batch["mel_output"] = mel_output
                 break
