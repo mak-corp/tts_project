@@ -37,7 +37,8 @@ class Trainer(BaseTrainer):
             skip_oom=True,
     ):
         super().__init__(model, criterion, metrics, optimizer, config, device)
-        #self.waveglow = WaveGlow(device)
+        use_waveglow = "waveglow_path" in config and device != torch.device("cpu")
+        self.waveglow = WaveGlow(config["waveglow_path"]) if use_waveglow else None
         self.skip_oom = skip_oom
         self.config = config
         self.train_dataloader = dataloaders["train"]
@@ -221,8 +222,9 @@ class Trainer(BaseTrainer):
         idx = np.random.choice(len(batch["text"]))
         self.writer.add_text("text", batch["raw_text"][idx])
 
-        # audio, sr = self.waveglow(batch["mel_output"][idx])
-        # self.writer.add_audio("audio", audio, sr)
+        if self.device != torch.device("cpu"):
+            audio, sr = self.waveglow(batch["mel_output"][idx])
+            self.writer.add_audio("audio", audio, sr)
         self._log_spectrogram("mel_output", batch["mel_output"], idx)
         self._log_spectrogram("mel_target", batch["mel_target"], idx)
 

@@ -85,5 +85,6 @@
     "wandb_project": "tts_project",
     "len_epoch": 5,
     "grad_norm_clip": 1.0
-  }
+  },
+  "waveglow_path": "./data/waveglow_256channels.pt"
 }
