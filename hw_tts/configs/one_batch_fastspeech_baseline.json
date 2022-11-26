@@ -1,0 +1,89 @@
+{
+  "name": "one_batch_fastspeech_baseline",
+  "n_gpu": -1,
+  "arch": {
+    "type": "FastSpeechBaselineModel",
+    "args": {}
+  },
+  "data": {
+    "train": {
+      "batch_sampler": {
+        "type": "TextLenBatchSampler",
+        "args": {
+          "batch_size": 10,
+          "batch_expand_size": 2
+        }
+      },
+      "collator": {
+        "type": "TTSCollator",
+        "args": {}
+      },
+      "num_workers": 8,
+      "datasets": [
+        {
+          "type": "TTSDataset",
+          "args": {
+            "data_path": "./data/train.txt",
+            "mel_ground_truth": "./data/mels",
+            "alignment_path": "./data/alignments",
+            "text_cleaners": ["english_cleaners"],
+            "limit": 10
+          }
+        }
+      ]
+    },
+    "val": {
+      "batch_size": 1,
+      "collator": {
+        "type": "TTSCollator",
+        "args": {}
+      },
+      "num_workers": 8,
+      "datasets": [
+        {
+          "type": "TTSDataset",
+          "args": {
+            "data_path": "./data/train.txt",
+            "mel_ground_truth": "./data/mels",
+            "alignment_path": "./data/alignments",
+            "text_cleaners": ["english_cleaners"],
+            "limit": 10
+          }
+        }
+      ]
+    }
+  },
+  "optimizer": {
+    "type": "AdamW",
+    "args": {
+      "lr": 1e-3,
+      "betas": [0.9, 0.98],
+      "eps": 1e-9
+    }
+  },
+  "loss": {
+    "type": "FastSpeechLoss",
+    "args": {}
+  },
+  "metrics": [],
+  "lr_scheduler": {
+    "type": "OneCycleLR",
+    "args": {
+      "anneal_strategy": "cos",
+      "max_lr": 1e-3,
+      "pct_start": 0.1
+    }
+  },
+  "trainer": {
+    "epochs": 50,
+    "save_dir": "saved/",
+    "save_period": 5,
+    "verbosity": 2,
+    "monitor": "min loss",
+    "early_stop": 100,
+    "visualize": "wandb",
+    "wandb_project": "tts_project",
+    "len_epoch": 5,
+    "grad_norm_clip": 1.0
+  }
+}
