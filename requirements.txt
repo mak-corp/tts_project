@@ -13,4 +13,4 @@ gdown
 unidecode
 dacite
 inflect
-spacy=3.4.3
+spacy==3.4.3

@@ -2,16 +2,16 @@ import numpy as np
 import torch
 
 
-class WaveGlow(object):
+class WaveGlowInfer(object):
     MAX_WAV_VALUE = 32768.0
 
-    def __init__(self, waveglow_path):
-        super(WaveGlow, self).__init__()
+    def __init__(self, waveglow_path, device):
+        super(WaveGlowInfer, self).__init__()
         # waveglow = torch.hub.load('NVIDIA/DeepLearningExamples:torchhub', 'nvidia_waveglow', model_math='fp32')
         # waveglow = waveglow.remove_weightnorm(waveglow)
         # self.waveglow = waveglow.to(device).eval()
 
-        waveglow = torch.load(waveglow_path)['model']
+        waveglow = torch.load(waveglow_path, map_location=device)['model']
         waveglow = waveglow.remove_weightnorm(waveglow)
         waveglow.cuda().eval()
         for m in waveglow.modules():
