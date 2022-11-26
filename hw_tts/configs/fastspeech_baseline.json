@@ -10,7 +10,7 @@
       "batch_sampler": {
         "type": "TextLenBatchSampler",
         "args": {
-          "batch_size": 20,
+          "batch_size": 30,
           "batch_expand_size": 32
         }
       },
@@ -74,8 +74,8 @@
     }
   },
   "trainer": {
-    "epochs": 2000,
-    "log_step": 500,
+    "epochs": 400,
+    "log_step": 1000,
     "save_dir": "saved/",
     "save_period": 5,
     "verbosity": 2,
@@ -83,7 +83,6 @@
     "early_stop": 100,
     "visualize": "wandb",
     "wandb_project": "tts_project",
-    "len_epoch": 1000,
     "grad_norm_clip": 10.0
   },
   "waveglow_path": "./data/waveglow_256channels.pt"
