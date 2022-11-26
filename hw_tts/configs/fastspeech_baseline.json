@@ -74,8 +74,8 @@
     }
   },
   "trainer": {
-    "epochs": 50,
-    "log_step": 200,
+    "epochs": 2000,
+    "log_step": 500,
     "save_dir": "saved/",
     "save_period": 5,
     "verbosity": 2,
@@ -83,7 +83,7 @@
     "early_stop": 100,
     "visualize": "wandb",
     "wandb_project": "tts_project",
-    "len_epoch": 400,
+    "len_epoch": 1000,
     "grad_norm_clip": 10.0
   },
   "waveglow_path": "./data/waveglow_256channels.pt"
