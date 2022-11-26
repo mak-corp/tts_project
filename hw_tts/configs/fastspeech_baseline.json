@@ -10,8 +10,8 @@
       "batch_sampler": {
         "type": "TextLenBatchSampler",
         "args": {
-          "batch_size": 10,
-          "batch_expand_size": 2
+          "batch_size": 20,
+          "batch_expand_size": 32
         }
       },
       "collator": {
@@ -26,8 +26,7 @@
             "data_path": "./data/train.txt",
             "mel_ground_truth": "./data/mels",
             "alignment_path": "./data/alignments",
-            "text_cleaners": ["english_cleaners"],
-            "limit": 10
+            "text_cleaners": ["english_cleaners"]
           }
         }
       ]
@@ -47,7 +46,7 @@
             "mel_ground_truth": "./data/mels",
             "alignment_path": "./data/alignments",
             "text_cleaners": ["english_cleaners"],
-            "limit": 10
+            "limit": 100
           }
         }
       ]
@@ -76,7 +75,7 @@
   },
   "trainer": {
     "epochs": 50,
-    "log_step": 50,
+    "log_step": 200,
     "save_dir": "saved/",
     "save_period": 5,
     "verbosity": 2,
@@ -84,8 +83,8 @@
     "early_stop": 100,
     "visualize": "wandb",
     "wandb_project": "tts_project",
-    "len_epoch": 5,
-    "grad_norm_clip": 1.0
+    "len_epoch": 400,
+    "grad_norm_clip": 10.0
   },
   "waveglow_path": "./data/waveglow_256channels.pt"
 }
