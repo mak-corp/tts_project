@@ -35,6 +35,15 @@ echo 'Unpacking alignments...'
 unzip alignments.zip >> /dev/null
 echo 'Complited'
 
+Waveglow
+echo 'Download WaveGlow...'
+python3 -c '
+import gdown
+gdown.download("https://drive.google.com/u/0/uc?id=1WsibBTsuRg_SF2Z6L6NFRTT-NjEy1oTx")
+'
+mv waveglow_256channels_ljs_v2.pt waveglow_256channels.pt
+echo 'Complited'
+
 echo
 echo "===================== Setup complited ====================="
 echo

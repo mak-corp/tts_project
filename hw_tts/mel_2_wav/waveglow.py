@@ -24,7 +24,7 @@ class WaveGlowInfer(object):
         mel = mel.unsqueeze(0).transpose(-1, -2)
         with torch.no_grad():
             audio = self.waveglow.infer(mel, sigma=sigma)
-            audio = audio * self.MAX_WAV_VALUE
+            # audio = audio * self.MAX_WAV_VALUE
         audio = audio.squeeze()
 
         rate = 22050
