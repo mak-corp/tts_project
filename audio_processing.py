@@ -68,7 +68,7 @@ def process_ljspeech(ljspeech_dir, output_dir, limit=None):
             process_utterance(mel_dir, pitch_dir, energy_dir, idx, join(ljspeech_dir, "wavs", wav_name + ".wav"), text)
 
     with open(join(output_dir, "train.txt"), "w", encoding='utf-8') as f:
-        f.write('\n'.join(text))
+        f.write('\n'.join(texts))
         f.write('\n')
 
     print()
