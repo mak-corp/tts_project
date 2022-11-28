@@ -8,6 +8,7 @@ import pyworld
 import time
 import torch
 from tqdm import tqdm
+from sklearn.preprocessing import StandardScaler
 
 from hw_tts.contrib.audio.hparams_audio import hop_length
 from hw_tts.contrib.audio.tools import get_mel
@@ -33,14 +34,19 @@ def get_mel_and_energy(wav_path):
     return mel, energy
 
 
-def process_utterance(mel_dir, pitch_dir, energy_dir, idx, wav_path, text):
+def process_utterance(wav_path):
     wav, sr = librosa.load(wav_path)
     pitch = get_pitch(wav, sr)
     mel, energy = get_mel_and_energy(wav_path)
 
-    np.save(join(mel_dir, "ljspeech-mel-%05d.npy" % idx), mel.T, allow_pickle=False)
-    np.save(join(pitch_dir, "ljspeech-pitch-%05d.npy" % idx), pitch, allow_pickle=False)
-    np.save(join(energy_dir, "ljspeech-energy-%05d.npy" % idx), energy, allow_pickle=False)
+    return mel.T, pitch, energy
+
+
+def normalize(scaler, value_dir):
+    for filename in os.listdir(value_dir):
+        filename = os.path.join(value_dir, filename)
+        values = (np.load(filename) - scaler.mean_[0]) / scaler.scale_[0]
+        np.save(filename, values, allow_pickle=False)
 
 
 def process_ljspeech(ljspeech_dir, output_dir, limit=None):
@@ -58,18 +64,31 @@ def process_ljspeech(ljspeech_dir, output_dir, limit=None):
     os.makedirs(pitch_dir, exist_ok=False)
     os.makedirs(energy_dir, exist_ok=False)
 
+    pitch_scaler = StandardScaler()
+    energy_scaler = StandardScaler()
+
     texts = []
     with open(join(ljspeech_dir, "metadata.csv"), "r", encoding='utf-8') as f:
         for idx, line in tqdm(enumerate(f.readlines())):
             if limit is not None and idx >= limit:
                 break
-            wav_name, text, _ = line.strip().split('|')
+            wav_name, _, text = line.strip().split('|')
             texts.append(text)
-            process_utterance(mel_dir, pitch_dir, energy_dir, idx, join(ljspeech_dir, "wavs", wav_name + ".wav"), text)
+            mel, pitch, energy = process_utterance(join(ljspeech_dir, "wavs", wav_name + ".wav"))
+
+            pitch_scaler.partial_fit(pitch.reshape((-1, 1)))
+            energy_scaler.partial_fit(energy.reshape((-1, 1)))
+
+            np.save(join(mel_dir, "ljspeech-mel-%05d.npy" % idx), mel, allow_pickle=False)
+            np.save(join(pitch_dir, "ljspeech-pitch-%05d.npy" % idx), pitch, allow_pickle=False)
+            np.save(join(energy_dir, "ljspeech-energy-%05d.npy" % idx), energy, allow_pickle=False)
 
     with open(join(output_dir, "train.txt"), "w", encoding='utf-8') as f:
         f.write('\n'.join(texts))
         f.write('\n')
+
+    normalize(pitch_scaler, pitch_dir)
+    normalize(energy_scaler, energy_dir)
 
     print()
     print("============================== Processing finished ==============================")
