@@ -79,9 +79,9 @@ def process_ljspeech(ljspeech_dir, output_dir, limit=None):
             pitch_scaler.partial_fit(pitch.reshape((-1, 1)))
             energy_scaler.partial_fit(energy.reshape((-1, 1)))
 
-            np.save(join(mel_dir, "ljspeech-mel-%05d.npy" % idx), mel, allow_pickle=False)
-            np.save(join(pitch_dir, "ljspeech-pitch-%05d.npy" % idx), pitch, allow_pickle=False)
-            np.save(join(energy_dir, "ljspeech-energy-%05d.npy" % idx), energy, allow_pickle=False)
+            np.save(join(mel_dir, "ljspeech-mel-%05d.npy" % (idx+1)), mel, allow_pickle=False)
+            np.save(join(pitch_dir, "ljspeech-pitch-%05d.npy" % (idx+1)), pitch, allow_pickle=False)
+            np.save(join(energy_dir, "ljspeech-energy-%05d.npy" % (idx+1)), energy, allow_pickle=False)
 
     with open(join(output_dir, "train.txt"), "w", encoding='utf-8') as f:
         f.write('\n'.join(texts))

@@ -7,31 +7,32 @@ import torch
 from tqdm import tqdm
 
 import numpy as np
+from scipy.io.wavfile import write
 
 import hw_tts.model as module_model
 from hw_tts.trainer import Trainer
 from hw_tts.utils import ROOT_PATH
 from hw_tts.utils.object_loading import get_dataloaders
 from hw_tts.utils.parse_config import ConfigParser
-from hw_tts.metric.utils import calc_wer, calc_cer
+from hw_tts.mel_2_wav import WaveGlowInfer
+
+from .test_data import get_test_data
 
 DEFAULT_CHECKPOINT_PATH = ROOT_PATH / "default_test_model" / "checkpoint.pth"
+MAX_WAV_VALUE = 32768.0
 
 
-def main(config, out_file):
+def main(config, out_dir):
     logger = config.get_logger("test")
 
     # define cpu or gpu if possible
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # text_encoder
-    text_encoder = config.get_text_encoder()
-
     # setup data_loader instances
-    dataloaders = get_dataloaders(config, text_encoder)
+    dataloaders = get_dataloaders(config)
 
     # build model architecture
-    model = config.init_obj(config["arch"], module_model, n_class=len(text_encoder))
+    model = config.init_obj(config["arch"], module_model)
     logger.info(model)
 
     logger.info("Loading checkpoint: {} ...".format(config.resume))
@@ -45,56 +46,24 @@ def main(config, out_file):
     model = model.to(device)
     model.eval()
 
-    results = []
-    wers, cers = [], []
-    wers_argmax, cers_argmax = [], []
+    test_data = get_test_data()
+
+    waveglow = WaveGlowInfer(config["waveglow_path"], device)
 
     with torch.no_grad():
-        for batch_num, batch in enumerate(tqdm(dataloaders["test"])):
+        for batch_num, batch in enumerate(tqdm(test_data)):
             batch = Trainer.move_batch_to_device(batch, device)
-            output = model(**batch)
-            if type(output) is dict:
-                batch.update(output)
-            else:
-                batch["logits"] = output
-            batch["log_probs"] = torch.log_softmax(batch["logits"], dim=-1)
-            batch["log_probs_length"] = model.transform_input_lengths(
-                batch["spectrogram_length"]
-            )
-            batch["probs"] = batch["log_probs"].exp().cpu()
-            batch["argmax"] = batch["probs"].argmax(-1)
+            output_mel = model(**batch)
+            batch["output_mel"] = output_mel
 
-            for i in range(len(batch["text"])):
-                argmax = batch["argmax"][i]
-                argmax = argmax[: int(batch["log_probs_length"][i])]
-                original_text = text_encoder.normalize_text(batch["text"][i])
-                text_argmax = text_encoder.ctc_decode(argmax.cpu().numpy())
-                texts_beam_search = text_encoder.ctc_beam_search(
-                    batch["probs"][i], batch["log_probs_length"][i], beam_size=100
-                )[:10]
+            audio, sr = waveglow(output_mel[0])
+            audio = audio * MAX_WAV_VALUE
+            audio = audio.cpu().numpy()
+            audio = audio.astype('int16')
 
-                wers.append(calc_wer(original_text, texts_beam_search[0].text))
-                cers.append(calc_cer(original_text, texts_beam_search[0].text))
-                wers_argmax.append(calc_wer(original_text, text_argmax))
-                cers_argmax.append(calc_cer(original_text, text_argmax))
-
-                results.append(
-                    {
-                        "ground_truth": batch["text"][i],
-                        "pred_text_argmax": text_argmax,
-                        "pred_text_beam_search": texts_beam_search
-                    }
-                )
-
-    print("===========================================")
-    print("WER (argmax):", np.array(wers_argmax).mean())
-    print("CER (argmax):", np.array(cers_argmax).mean())
-    print("WER (beam search):", np.array(wers).mean())
-    print("CER (beam search):", np.array(cers).mean())
-    print("===========================================")
-
-    with Path(out_file).open("w") as f:
-        json.dump(results, f, indent=2)
+            name = "a=%02f_pa=%02f_ea=%02f_text.wav" % (batch["alpha"], batch["pitch_alpha"], batch["energy_alpha"], batch["text_id"])
+            write(os.path.join(out_dir, name), audio, sr)
+            break
 
 
 if __name__ == "__main__":
@@ -123,23 +92,8 @@ if __name__ == "__main__":
     args.add_argument(
         "-o",
         "--output",
-        default="output.json",
         type=str,
-        help="File to write results (.json)",
-    )
-    args.add_argument(
-        "-t",
-        "--test-data-folder",
-        default=None,
-        type=str,
-        help="Path to dataset",
-    )
-    args.add_argument(
-        "-b",
-        "--batch-size",
-        default=5,
-        type=int,
-        help="Test dataset batch size",
+        help="Folder to write results",
     )
     args.add_argument(
         "-j",
@@ -166,30 +120,7 @@ if __name__ == "__main__":
         with Path(args.config).open() as f:
             config.config.update(json.load(f))
 
-    # if `--test-data-folder` was provided, set it as a default test set
-    if args.test_data_folder is not None:
-        test_data_folder = Path(args.test_data_folder).absolute().resolve()
-        assert test_data_folder.exists()
-        config.config["data"] = {
-            "test": {
-                "batch_size": args.batch_size,
-                "num_workers": args.jobs,
-                "datasets": [
-                    {
-                        "type": "CustomDirAudioDataset",
-                        "args": {
-                            "audio_dir": str(test_data_folder / "audio"),
-                            "transcription_dir": str(
-                                test_data_folder / "transcriptions"
-                            ),
-                        },
-                    }
-                ],
-            }
-        }
-
-    assert config.config.get("data", {}).get("test", None) is not None
-    config["data"]["test"]["batch_size"] = args.batch_size
     config["data"]["test"]["n_jobs"] = args.jobs
 
+    os.makedirs(args.output, exist_ok=True)
     main(config, args.output)
