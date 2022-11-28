@@ -131,8 +131,9 @@ class Trainer(BaseTrainer):
         """
         Move all necessary tensors to the HPU
         """
-        for tensor_for_gpu in ["text", "src_pos", "mel_target", "mel_pos", "duration"]:
-            batch[tensor_for_gpu] = batch[tensor_for_gpu].to(device)
+        for tensor_for_gpu in ["text", "src_pos", "mel_target", "mel_pos", "duration", "pitch", "energy"]:
+            if tensor_for_gpu in batch:
+                batch[tensor_for_gpu] = batch[tensor_for_gpu].to(device)
         return batch
 
     def process_batch(self, batch, is_train: bool, metrics: MetricTracker):
