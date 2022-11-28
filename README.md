@@ -1,4 +1,4 @@
-# tts_project
+# TTS project
 
 In this project I've implemented FastSpeech2 model to generate voice by text prompts.
 
@@ -25,7 +25,7 @@ Run test:
 ```shell
 
 python3 test.py \
--c hw_tts/configs/fastspeech_baseline.json \
+-c hw_tts/configs/fastspeech_2.json \
 -r checkpoints/TTS/best_model/model_best.pth \
 -o test_wavs
 
