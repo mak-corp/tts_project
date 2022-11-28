@@ -58,6 +58,22 @@ echo 'Preprocess LJSpeech...'
 python3 audio_processing.py --ljspeech-dir data/LJSpeech-1.1 --output-dir data_v2
 echo 'Complited'
 
+# Download checkpoints
+echo 'Download checkpoints...'
+python3 -c '
+import yadisk
+y = yadisk.YaDisk()
+y.download_public("https://disk.yandex.ru/d/nuo4pvUqQnoryA", "checkpoints/checkpoints.zip")
+'
+echo 'Unpacking checkpoints...'
+cd checkpoints
+unzip checkpoints.zip
+cd TTS
+unzip best_model.zip
+
+echo 'Complited'
+
+
 echo
 echo "===================== Setup complited ====================="
 echo

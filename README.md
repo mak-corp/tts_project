@@ -26,7 +26,7 @@ Run test:
 
 python3 test.py \
 -c hw_tts/configs/fastspeech_baseline.json \
--r saved/models/one_batch_fastspeech_baseline/polished-wind-43/model_best.pth \
+-r checkpoints/TTS/best_model/model_best.pth \
 -o test_wavs
 
 ```
