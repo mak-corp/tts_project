@@ -16,7 +16,7 @@ from hw_tts.utils.object_loading import get_dataloaders
 from hw_tts.utils.parse_config import ConfigParser
 from hw_tts.mel_2_wav import WaveGlowInfer
 
-from .test_data import get_test_data
+from hw_tts.datasets.test_data import get_test_data
 
 DEFAULT_CHECKPOINT_PATH = ROOT_PATH / "default_test_model" / "checkpoint.pth"
 MAX_WAV_VALUE = 32768.0
