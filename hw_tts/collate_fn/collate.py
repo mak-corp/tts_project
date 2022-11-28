@@ -117,6 +117,14 @@ def collate_fn(batch_list: List[dict]):
            "src_pos": src_pos.long(),
            "mel_max_len": max_mel_len}
 
+    if "pitch" in batch_list[0] and "energy" in batch_list[0]:
+        pitch = [elem["pitch"] for elem in batch_list]
+        energy = [elem["energy"] for elem in batch_list]
+        out.update({
+            "pitch": pad_1D_tensor(pitch).float(),
+            "energy": pad_1D_tensor(energy).float(),
+        })
+
     return out
 
 

@@ -54,10 +54,10 @@ class Trainer(BaseTrainer):
         self.log_step = config["trainer"]["log_step"]
 
         self.train_metrics = MetricTracker(
-            "loss", "mel_loss", "duration_loss", "grad norm", *[m.name for m in self.metrics], writer=self.writer
+            "loss", "mel_loss", "duration_loss", "pitch_loss", "energy_loss", "grad norm", *[m.name for m in self.metrics], writer=self.writer
         )
         self.evaluation_metrics = MetricTracker(
-            "loss", "mel_loss", "duration_loss", *[m.name for m in self.metrics], writer=self.writer
+            "loss", "mel_loss", "duration_loss", "pitch_loss", "energy_loss", *[m.name for m in self.metrics], writer=self.writer
         )
 
     def _clip_grad_norm(self):
@@ -141,32 +141,26 @@ class Trainer(BaseTrainer):
         if is_train:
             self.optimizer.zero_grad()
 
-        mel_output, duration_predictor_output = self.model(**batch)
-        batch["mel_output"] = mel_output
-        batch["duration_predictor_output"] = duration_predictor_output
+        out = self.model(**batch)
+        if isinstance(out, dict):
+            batch.update(out)
+        else:
+            mel_output, duration_predictor_output = out
+            batch["mel_output"] = mel_output
+            batch["duration_predictor_output"] = duration_predictor_output
 
-        mel_loss, duration_loss = self.criterion(
-            mel_output,
-            duration_predictor_output,
-            batch["mel_target"],
-            batch["duration"])
-        
-        loss = mel_loss + duration_loss
-
-        batch["mel_loss"] = mel_loss
-        batch["duration_loss"] = duration_loss
-        batch["loss"] = loss
+        losses = self.criterion(**batch)
+        batch.update(losses)
 
         if is_train:
-            loss.backward()
+            losses["loss"].backward()
             self._clip_grad_norm()
             self.optimizer.step()
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
 
-        metrics.update("loss", loss.item())
-        metrics.update("mel_loss", mel_loss.item())
-        metrics.update("duration_loss", duration_loss.item())
+        for loss_name, loss_value in losses.items():
+            metrics.update(loss_name, loss_value.item())
         for met in self.metrics:
             metrics.update(met.name, met(**batch))
         return batch
