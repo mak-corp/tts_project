@@ -382,6 +382,9 @@ class LengthRegulator(nn.Module):
             duration = ((torch.exp(duration) + 0.5) * alpha).long()
             duration = duration * (torch.cumsum(duration, dim=-1) <= self.max_seq_len)
 
+            if duration.sum() < 10:
+                duration[0][0] = duration[0][0] + 10
+
             output = self.LR(x, duration)
             
             mel_pos = torch.arange(1, output.size(1) + 1, dtype=torch.long, device=x.device).unsqueeze(0)
