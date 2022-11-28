@@ -16,7 +16,7 @@ from hw_tts.utils.object_loading import get_dataloaders
 from hw_tts.utils.parse_config import ConfigParser
 from hw_tts.mel_2_wav import WaveGlowInfer
 
-from hw_tts.datasets.test_data import get_test_data
+from hw_tts.datasets.test_data import get_test_data, get_v1_test_data
 
 DEFAULT_CHECKPOINT_PATH = ROOT_PATH / "default_test_model" / "checkpoint.pth"
 MAX_WAV_VALUE = 32768.0
@@ -28,11 +28,8 @@ def main(config, out_dir):
     # define cpu or gpu if possible
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # setup data_loader instances
-    dataloaders = get_dataloaders(config)
-
     # build model architecture
-    model = config.init_obj(config["arch"], module_model)
+    model = config.init_obj(config["arch"], module_model, config["arch"]["args"])
     logger.info(model)
 
     logger.info("Loading checkpoint: {} ...".format(config.resume))
@@ -46,7 +43,10 @@ def main(config, out_dir):
     model = model.to(device)
     model.eval()
 
-    test_data = get_test_data()
+    if config["arch"]["type"] == "FastSpeechBaselineModel":
+        test_data = get_v1_test_data()
+    else:
+        test_data = get_test_data()
 
     waveglow = WaveGlowInfer(config["waveglow_path"], device)
 
@@ -61,9 +61,11 @@ def main(config, out_dir):
             audio = audio.cpu().numpy()
             audio = audio.astype('int16')
 
-            name = "a=%02f_pa=%02f_ea=%02f_text.wav" % (batch["alpha"], batch["pitch_alpha"], batch["energy_alpha"], batch["text_id"])
-            write(os.path.join(out_dir, name), audio, sr)
-            break
+            if "pitch_alpha" in batch and "energy_alpha" in batch:
+                name = "a=%.2f_pa=%.2f_ea=%.2f_text=%d.wav" % (batch["alpha"], batch["pitch_alpha"], batch["energy_alpha"], batch["text_id"])
+            else:
+                name = "a=%.2f_text=%d.wav" % (batch["alpha"], batch["text_id"])
+            write(os.path.join(out_dir, name), sr, audio)
 
 
 if __name__ == "__main__":
@@ -95,13 +97,6 @@ if __name__ == "__main__":
         type=str,
         help="Folder to write results",
     )
-    args.add_argument(
-        "-j",
-        "--jobs",
-        default=1,
-        type=int,
-        help="Number of workers for test dataloader",
-    )
 
     args = args.parse_args()
 
@@ -119,8 +114,6 @@ if __name__ == "__main__":
     if args.config is not None:
         with Path(args.config).open() as f:
             config.config.update(json.load(f))
-
-    config["data"]["test"]["n_jobs"] = args.jobs
 
     os.makedirs(args.output, exist_ok=True)
     main(config, args.output)

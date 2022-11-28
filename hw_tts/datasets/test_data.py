@@ -12,18 +12,25 @@ ALPHA_GRID = [0.8, 1.0, 1.2]
 TEXT_CLEANERS = ["english_cleaners"]
 
 
-def get_batch(alpha, pitch_alpha, energy_alpha, raw_text, text_id):
+def get_batch(raw_text, text_id, alpha, pitch_alpha=None, energy_alpha=None):
     text = torch.tensor(text_to_sequence(raw_text, TEXT_CLEANERS)).long()
 
-    return {
+    batch = {
         "raw_text": [raw_text],
         "text_id": text_id,
         "text": text.unsqueeze(0),
         "src_pos": torch.arange(1, text.shape[0] + 1, dtype=torch.long).unsqueeze(0),
         "alpha": alpha,
-        "pitch_alpha": pitch_alpha,
-        "energy_alpha": energy_alpha,
     }
+
+    if pitch_alpha is not None and energy_alpha is not None:
+        batch.update({
+            "pitch_alpha": pitch_alpha,
+            "energy_alpha": energy_alpha,
+        })
+    
+    return batch
+
 
 def get_test_data():
     batches = []
@@ -31,5 +38,12 @@ def get_test_data():
         for pitch_alpha in ALPHA_GRID:
             for energy_alpha in ALPHA_GRID:
                 for text_id, text in enumerate(TEXT_PROMPTS):
-                    batches.append(get_batch(alpha, pitch_alpha, energy_alpha, text, text_id))
+                    batches.append(get_batch(text, text_id, alpha, pitch_alpha, energy_alpha))
+    return batches
+
+def get_v1_test_data():
+    batches = []
+    for alpha in ALPHA_GRID:
+        for text_id, text in enumerate(TEXT_PROMPTS):
+            batches.append(get_batch(text, text_id, alpha))
     return batches
