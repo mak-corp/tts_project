@@ -6,6 +6,8 @@ __pycache__/
 
 junk.ipynb
 data_v2
+test_wavs
+checkpoints
 
 # C extensions
 *.so

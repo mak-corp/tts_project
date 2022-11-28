@@ -41,6 +41,7 @@ def get_test_data():
                     batches.append(get_batch(text, text_id, alpha, pitch_alpha, energy_alpha))
     return batches
 
+
 def get_v1_test_data():
     batches = []
     for alpha in ALPHA_GRID:
