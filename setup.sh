@@ -59,6 +59,7 @@ python3 audio_processing.py --ljspeech-dir data/LJSpeech-1.1 --output-dir data_v
 echo 'Complited'
 
 # Download checkpoints
+mkdir checkpoints
 echo 'Download checkpoints...'
 python3 -c '
 import yadisk
@@ -68,8 +69,6 @@ y.download_public("https://disk.yandex.ru/d/nuo4pvUqQnoryA", "checkpoints/checkp
 echo 'Unpacking checkpoints...'
 cd checkpoints
 unzip checkpoints.zip
-cd TTS
-unzip best_model.zip
 
 echo 'Complited'
 
