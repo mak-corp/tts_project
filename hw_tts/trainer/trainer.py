@@ -2,6 +2,7 @@ import random
 from pathlib import Path
 from random import shuffle
 from itertools import chain
+from collections import defaultdict
 
 import numpy as np
 import PIL
@@ -61,10 +62,7 @@ class Trainer(BaseTrainer):
             "loss", "mel_loss", "duration_loss", "pitch_loss", "energy_loss", *[m.name for m in self.metrics], writer=self.writer
         )
 
-        if config["arch"]["type"] == "FastSpeechBaselineModel":
-            self.test_data = get_v1_test_data()
-        else:
-            self.test_data = get_test_data()
+        self.is_v1_model = config["arch"]["type"] == "FastSpeechBaselineModel"
 
     def _clip_grad_norm(self):
         if self.config["trainer"].get("grad_norm_clip", None) is not None:
@@ -126,9 +124,11 @@ class Trainer(BaseTrainer):
             
         log = last_train_metrics
 
-        for part, dataloader in self.evaluation_dataloaders.items():
-            val_log = self._fixed_text_evaluation_epoch(epoch, part)
-            log.update(**{f"{part}_{name}": value for name, value in val_log.items()})
+        self._test_epoch(epoch, "test")
+
+        # for part, dataloader in self.evaluation_dataloaders.items():
+        #     val_log = self._evaluation_epoch(epoch, part, dataloader)
+        #     log.update(**{f"{part}_{name}": value for name, value in val_log.items()})
 
         return log
 
@@ -207,27 +207,32 @@ class Trainer(BaseTrainer):
         #     self.writer.add_histogram(name, p, bins="auto")
         return self.evaluation_metrics.result()
 
-    def _fixed_text_evaluation_epoch(self, epoch, part):
+    def _test_epoch(self, epoch, part):
         """
         Validate after training an epoch
 
         :param epoch: Integer, current training epoch.
         :return: A log that contains information about validation
         """
+        if self.is_v1_model:
+            test_data = get_v1_test_data()
+        else:
+            test_data = get_test_data()
+
         self.model.eval()
         self.evaluation_metrics.reset()
 
         self.writer.set_step(epoch * self.len_epoch, part)
         
         with torch.no_grad():
-            for batch_num, batch in enumerate(tqdm(self.test_data)):
-                batch = Trainer.move_batch_to_device(batch, self.device)
-                mel_output = self.model(**batch)
-                batch["mel_output"] = mel_output
-            
-                self._log_predictions(batch, is_train=False, add_audio_desc=True)
-
-        return self.evaluation_metrics.result()
+            test_results = defaultdict(list)
+            for text_id, batches in tqdm(test_data.items()):
+                for batch in tqdm(batches):
+                    batch = Trainer.move_batch_to_device(batch, self.device)
+                    mel_output = self.model(**batch)
+                    batch["mel_output"] = mel_output
+                    test_results[text_id].append(batch)
+        self._log_test_predictions(test_results)
 
     def _progress(self, batch_idx):
         base = "[{}/{} ({:.0f}%)]"
@@ -239,31 +244,32 @@ class Trainer(BaseTrainer):
             total = self.len_epoch
         return base.format(current, total, 100.0 * current / total)
 
-    def _log_predictions(self, batch, is_train, add_audio_desc=False):
+    def _log_test_predictions(self, test_results):
+        for text_id, batches in test_results.items():
+            self.writer.add_text("text={}/text".format(text_id), batches[0]["raw_text"])
+            for batch in batches:
+                prefix = "text={}/{}".format(text_id, batch["name"])
+                self._log_spectrogram(f"{prefix}/mel_output", batch["mel_output"], idx=0)
+                if self.use_waveglow:
+                    audio, sr = self.waveglow(batch["mel_output"][0])
+                    self.writer.add_audio(f"{prefix}/audio", audio, sr)
+
+    def _log_predictions(self, batch, is_train):
         if self.writer is None:
             return
 
         idx = np.random.choice(len(batch["text"]))
-        self.writer.add_text("text", batch["raw_text"][idx])
+        self.writer.add_text("train/text", batch["raw_text"][idx])
 
         if self.use_waveglow:
             audio, sr = self.waveglow(batch["mel_output"][idx])
-            if add_audio_desc:
-                if "pitch_alpha" in batch and "energy_alpha" in batch:
-                    name = "a=%.2f_pa=%.2f_ea=%.2f_text=%d" % (batch["alpha"], batch["pitch_alpha"], batch["energy_alpha"], batch["text_id"])
-                else:
-                    name = "a=%.2f_text=%d" % (batch["alpha"], batch["text_id"])
-            else:
-                name = "audio"
-            self.writer.add_audio(name, audio, sr)
+            self.writer.add_audio("train/audio", audio, sr)
             
-            if "mel_target" in batch:
-                audio, sr = self.waveglow(batch["mel_target"][idx])
-                self.writer.add_audio("audio_target", audio, sr)
+            audio, sr = self.waveglow(batch["mel_target"][idx])
+            self.writer.add_audio("train/audio_target", audio, sr)
 
-        self._log_spectrogram("mel_output", batch["mel_output"], idx)
-        if "mel_target" in batch:
-            self._log_spectrogram("mel_target", batch["mel_target"], idx)
+        self._log_spectrogram("train/mel_output", batch["mel_output"], idx)
+        self._log_spectrogram("train/mel_target", batch["mel_target"], idx)
 
     def _log_spectrogram(self, name, spectrogram_batch, idx=None):
         idx = idx if idx is not None else np.random.choice(len(spectrogram_batch))

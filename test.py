@@ -51,21 +51,19 @@ def main(config, out_dir):
     waveglow = WaveGlowInfer(config["waveglow_path"], device)
 
     with torch.no_grad():
-        for batch_num, batch in enumerate(tqdm(test_data)):
-            batch = Trainer.move_batch_to_device(batch, device)
-            output_mel = model(**batch)
-            batch["output_mel"] = output_mel
+        for text_id, batches in tqdm(test_data.items()):
+            for batch in tqdm(batches):
+                batch = Trainer.move_batch_to_device(batch, device)
+                output_mel = model(**batch)
+                batch["output_mel"] = output_mel
 
-            audio, sr = waveglow(output_mel[0])
-            audio = audio * MAX_WAV_VALUE
-            audio = audio.cpu().numpy()
-            audio = audio.astype('int16')
+                audio, sr = waveglow(output_mel[0])
+                audio = audio * MAX_WAV_VALUE
+                audio = audio.cpu().numpy()
+                audio = audio.astype('int16')
 
-            if "pitch_alpha" in batch and "energy_alpha" in batch:
-                name = "a=%.2f_pa=%.2f_ea=%.2f_text=%d.wav" % (batch["alpha"], batch["pitch_alpha"], batch["energy_alpha"], batch["text_id"])
-            else:
-                name = "a=%.2f_text=%d.wav" % (batch["alpha"], batch["text_id"])
-            write(os.path.join(out_dir, name), sr, audio)
+                name = "{}_text={}.wav".format(batch["name"], batch["text_id"])
+                write(os.path.join(out_dir, name), sr, audio)
 
 
 if __name__ == "__main__":

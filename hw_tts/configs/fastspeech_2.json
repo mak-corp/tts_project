@@ -10,7 +10,7 @@
       "batch_sampler": {
         "type": "TextLenBatchSampler",
         "args": {
-          "batch_size": 30,
+          "batch_size": 35,
           "batch_expand_size": 32
         }
       },
@@ -78,14 +78,15 @@
     }
   },
   "trainer": {
-    "epochs": 200,
-    "log_step": 1000,
+    "epochs": 80,
+    "log_step": 2000,
     "save_dir": "saved/",
     "save_period": 5,
     "verbosity": 2,
     "monitor": "min loss",
     "early_stop": 100,
     "visualize": "wandb",
+    "len_epoch": 1870,
     "wandb_project": "tts_project",
     "grad_norm_clip": 10.0
   },
