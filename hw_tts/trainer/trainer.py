@@ -16,6 +16,7 @@ from hw_tts.base import BaseTrainer
 from hw_tts.logger.utils import plot_spectrogram_to_buf
 from hw_tts.utils import inf_loop, MetricTracker
 from hw_tts.mel_2_wav import WaveGlowInfer
+from hw_tts.datasets.test_data import get_test_data, get_v1_test_data
 
 
 class Trainer(BaseTrainer):
@@ -59,6 +60,11 @@ class Trainer(BaseTrainer):
         self.evaluation_metrics = MetricTracker(
             "loss", "mel_loss", "duration_loss", "pitch_loss", "energy_loss", *[m.name for m in self.metrics], writer=self.writer
         )
+
+        if config["arch"]["type"] == "FastSpeechBaselineModel":
+            self.test_data = get_v1_test_data()
+        else:
+            self.test_data = get_test_data()
 
     def _clip_grad_norm(self):
         if self.config["trainer"].get("grad_norm_clip", None) is not None:
@@ -121,7 +127,7 @@ class Trainer(BaseTrainer):
         log = last_train_metrics
 
         for part, dataloader in self.evaluation_dataloaders.items():
-            val_log = self._evaluation_epoch(epoch, part, dataloader)
+            val_log = self._fixed_text_evaluation_epoch(epoch, part)
             log.update(**{f"{part}_{name}": value for name, value in val_log.items()})
 
         return log
@@ -201,6 +207,28 @@ class Trainer(BaseTrainer):
         #     self.writer.add_histogram(name, p, bins="auto")
         return self.evaluation_metrics.result()
 
+    def _fixed_text_evaluation_epoch(self, epoch, part):
+        """
+        Validate after training an epoch
+
+        :param epoch: Integer, current training epoch.
+        :return: A log that contains information about validation
+        """
+        self.model.eval()
+        self.evaluation_metrics.reset()
+
+        self.writer.set_step(epoch * self.len_epoch, part)
+        
+        with torch.no_grad():
+            for batch_num, batch in enumerate(tqdm(self.test_data)):
+                batch = Trainer.move_batch_to_device(batch, self.device)
+                mel_output = self.model(**batch)
+                batch["mel_output"] = mel_output
+            
+                self._log_predictions(batch, is_train=False, add_audio_desc=True)
+
+        return self.evaluation_metrics.result()
+
     def _progress(self, batch_idx):
         base = "[{}/{} ({:.0f}%)]"
         if hasattr(self.train_dataloader, "n_samples"):
@@ -211,7 +239,7 @@ class Trainer(BaseTrainer):
             total = self.len_epoch
         return base.format(current, total, 100.0 * current / total)
 
-    def _log_predictions(self, batch, is_train):
+    def _log_predictions(self, batch, is_train, add_audio_desc=False):
         if self.writer is None:
             return
 
@@ -220,9 +248,22 @@ class Trainer(BaseTrainer):
 
         if self.use_waveglow:
             audio, sr = self.waveglow(batch["mel_output"][idx])
-            self.writer.add_audio("audio", audio, sr)
+            if add_audio_desc:
+                if "pitch_alpha" in batch and "energy_alpha" in batch:
+                    name = "a=%.2f_pa=%.2f_ea=%.2f_text=%d" % (batch["alpha"], batch["pitch_alpha"], batch["energy_alpha"], batch["text_id"])
+                else:
+                    name = "a=%.2f_text=%d" % (batch["alpha"], batch["text_id"])
+            else:
+                name = "audio"
+            self.writer.add_audio(name, audio, sr)
+            
+            if "mel_target" in batch:
+                audio, sr = self.waveglow(batch["mel_target"][idx])
+                self.writer.add_audio("audio_target", audio, sr)
+
         self._log_spectrogram("mel_output", batch["mel_output"], idx)
-        self._log_spectrogram("mel_target", batch["mel_target"], idx)
+        if "mel_target" in batch:
+            self._log_spectrogram("mel_target", batch["mel_target"], idx)
 
     def _log_spectrogram(self, name, spectrogram_batch, idx=None):
         idx = idx if idx is not None else np.random.choice(len(spectrogram_batch))

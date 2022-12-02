@@ -71,18 +71,20 @@ class MultiHeadAttention(nn.Module):
         nn.init.normal_(self.w_vs.weight, mean=0,
                         std=np.sqrt(2.0 / (self.d_model + self.d_v))) 
         
-    def forward(self, q, k, v, mask=None):
+    def forward(self, x, mask=None):
         d_k, d_v, n_head = self.d_k, self.d_v, self.n_head
 
-        sz_b, len_q, _ = q.size()
-        sz_b, len_k, _ = k.size()
-        sz_b, len_v, _ = v.size()
+        sz_b, len_q, _ = x.size()
+        sz_b, len_k, _ = x.size()
+        sz_b, len_v, _ = x.size()
 
-        residual = q
+        residual = x
 
-        q = self.w_qs(q).view(sz_b, len_q, n_head, d_k)
-        k = self.w_ks(k).view(sz_b, len_k, n_head, d_k)
-        v = self.w_vs(v).view(sz_b, len_v, n_head, d_v)
+        x = self.layer_norm(x)
+
+        q = self.w_qs(x).view(sz_b, len_q, n_head, d_k)
+        k = self.w_ks(x).view(sz_b, len_k, n_head, d_k)
+        v = self.w_vs(x).view(sz_b, len_v, n_head, d_v)
 
         q = q.permute(2, 0, 1, 3).contiguous().view(-1, len_q, d_k)  # (n*b) x lq x dk
         k = k.permute(2, 0, 1, 3).contiguous().view(-1, len_k, d_k)  # (n*b) x lk x dk
@@ -96,9 +98,8 @@ class MultiHeadAttention(nn.Module):
         output = output.permute(1, 2, 0, 3).contiguous().view(sz_b, len_q, -1)  # b x lq x (n*dv)
 
         output = self.dropout(self.fc(output))
-        output = self.layer_norm(output + residual)
 
-        return output, attn
+        return output + residual, attn
 
 
 class PositionwiseFeedForward(nn.Module):
@@ -120,13 +121,13 @@ class PositionwiseFeedForward(nn.Module):
 
     def forward(self, x):
         residual = x
+        output = self.layer_norm(x)
         output = x.transpose(1, 2)
         output = self.w_2(F.relu(self.w_1(output)))
         output = output.transpose(1, 2)
         output = self.dropout(output)
-        output = self.layer_norm(output + residual) # TODO change layer_norm
 
-        return output
+        return output + residual
 
 
 class FFTBlock(torch.nn.Module):
@@ -149,7 +150,7 @@ class FFTBlock(torch.nn.Module):
 
     def forward(self, enc_input, non_pad_mask=None, slf_attn_mask=None):
         enc_output, enc_slf_attn = self.slf_attn(
-            enc_input, enc_input, enc_input, mask=slf_attn_mask)
+            enc_input, mask=slf_attn_mask)
         
         if non_pad_mask is not None:
             enc_output *= non_pad_mask
@@ -379,7 +380,7 @@ class LengthRegulator(nn.Module):
             return output, duration_predictor_output
         else:
             duration = torch.clamp(torch.exp(duration_predictor_output), min=0, max=100)
-            duration = ((torch.exp(duration) + 0.5) * alpha).long()
+            duration = ((duration + 0.5) * alpha).long()
             duration = duration * (torch.cumsum(duration, dim=-1) <= self.max_seq_len)
 
             if duration.sum() < 10:
@@ -549,6 +550,8 @@ class FastSpeech2(BaseModel):
             )
             output = self.decoder(output, mel_pos)
             output = self.mask_tensor(output, mel_pos, mel_max_length)
+            energy_prediction.masked_fill_(mel_pos == 0, 0.0)
+            pitch_prediction.masked_fill_(mel_pos == 0, 0.0)
             output = self.mel_linear(output)
             return {
                 "mel_output": output,
